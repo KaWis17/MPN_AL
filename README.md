@@ -2,33 +2,35 @@
 
 Active learning pipeline for multi-class cell instance segmentation on bone-marrow trephine WSIs in Ph-negative MPN (PV, ET, PMF), with QuPath review and training on PLGrid.
 
-The repository holds **documentation, source code, configs, and schemas**. Working data (WSIs, masks, annotations, models, predictions) is **not committed**; it lives under a local or PLGrid `data/` tree that matches the layout below. That directory is listed in `.gitignore`. Create it with:
+The repository holds **documentation, source code, configs, and schemas**. Working data is **not committed** (see `.gitignore`). Create the local tree with:
 
 ```bash
 scripts/init_data_dirs.sh
 ```
+
+Per-step storage and IDs: [docs/architecture/data-layout.md](docs/architecture/data-layout.md).
 
 ## Repository structure
 
 ```text
 MPN_AL/
   docs/
-    architecture/          # system architecture
+    architecture/          # system + data architecture
     meetings/              # meeting notes
   src/
-    backend/               # shared backend and state
-    image_backend/         # tile read/cache (1024×1024 @ 40×), fat/bone filters
-    embeddings/            # appearance embeddings (e.g. H-optimus, UNI2-h)
-    preprocessing/         # tissue/QC masks, tile grid
-    segmenter/             # cell instance masks and error signals
-    selector/              # tile selection (uncertainty, rarity, cost, dedup)
-    task_manager/          # queries: tile + instructions + status
-    annotation_validation/ # geometry checks, versions, ignore vs ground truth
-    training/              # fine-tune on dataset_vN
-    evaluation/            # held-out validation and test
-    model_registry/        # model versions, configs, metrics
+    backend/
+    image_backend/
+    embeddings/
+    preprocessing/
+    segmenter/
+    selector/
+    task_manager/
+    annotation_validation/
+    training/
+    evaluation/
+    model_registry/
   tools/
-    qupath_converter/      # QuPath package sync with pathologist
+    qupath_converter/
   configs/
     labels/
     selection/
@@ -40,32 +42,39 @@ MPN_AL/
 
 ## Data layout (not in Git)
 
-Expected path on disk / group storage. Create with `scripts/init_data_dirs.sh`.
+Pipeline order. Join key after preprocessing: **`tile_id`** (annotation FOV 1024×1024). Each preprocessing config is a frozen **`prep_id`** run.
 
 ```text
 data/
   00_raw/
-    wsi/                   # de-identified WSI pyramids
-    clinical/              # pseudonymised clinical table
-  01_annotations/
-    round_00_initial_manual/
-    round_NN_reviewed/
+    wsi/<patient_id>/<slide_id>.ndpi
+    clinical/
+    slides.parquet
+  01_preprocessing/
+    runs/<prep_id>/
+      config.yaml
+      provenance.json
+      tiles.parquet
+      model_windows.parquet
+      slides/<slide_id>/tissue|qc/
+  02_active_learning/
+    rounds/<round_id>/
+    packages/
+  03_predictions/
+    <round_id>/by_tile/<tile_id>.geojson
+  04_annotations/
     protocol_versions/
-  02_targets/
-    dataset_vNN/           # instance / type / ignore masks for training
-  03_active_learning/
-    round_NN/              # scores, selected tiles, embeddings, time logs
-    packages/              # QuPath packages (model + doctor export)
-  04_models/
-    round_NN/
+    round_00_initial_manual/by_tile/<tile_id>.geojson
+    <round_id>_reviewed/by_tile/<tile_id>.geojson
+  05_targets/
+    <dataset_id>/by_tile/<tile_id>/
+  06_models/
     fm_weights/
-  05_predictions/
-    round_NN_for_review/   # AI suggestions before review
-  06_manifests/            # splits, dataset manifests, checksums
-  07_evaluation/           # metrics and learning curves
-  08_preprocessing/
-    <slide_id>/
-      tissue/
-      qc/
-      tiles.csv
+    <round_id>/<run_id>/
+  07_manifests/
+    patient_split_fixed.csv
+    annotation_manifest.parquet
+    datasets/<dataset_id>.parquet
+  08_evaluation/
+    <round_id_or_run_id>/
 ```
