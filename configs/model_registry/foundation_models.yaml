@@ -1,0 +1,64 @@
+schema_version: 1
+defaults:
+  output_size: 1024
+  device: auto
+  input_formats: [.ndpi, .png]
+  border:
+    default_ratio: 0.0
+    ratio_semantics: per_side
+    padding_policy: reflect
+  checkpoint_root: data/06_models/fm_weights
+
+# Stable IDs are the only IDs used by contracts and results. Friendly aliases
+# should be handled by run_foundation_model.py when that dispatcher is added.
+models:
+  pathosam:
+    aliases: [patho-sam]
+    upstream: https://github.com/computational-cell-analytics/patho-sam
+    paper: https://arxiv.org/abs/2502.00408
+    checkpoint: data/06_models/fm_weights/pathosam/
+    checkpoint_source: See upstream release; no automatic download.
+    license: Verify code, checkpoint, and output terms at upstream source.
+    device: cuda
+    parameters: {threshold: null, model_native_size: null}
+    dependency_constraints: {torch: model-specific, optional_packages: model-specific}
+  cellvit:
+    aliases: [cellvit++]
+    upstream: https://github.com/TIO-IKIM/CellViT-plus-plus
+    paper: https://pubmed.ncbi.nlm.nih.gov/41576779/
+    checkpoint: data/06_models/fm_weights/cellvit/
+    checkpoint_source: See upstream release; no automatic download.
+    license: Verify code, checkpoint, and output terms at upstream source.
+    device: cuda
+    parameters: {threshold: null, model_native_size: null, magnification: null, mpp: null}
+    dependency_constraints: {torch: model-specific, optional_packages: model-specific}
+  cellsam:
+    aliases: [cell-sam]
+    upstream: https://github.com/vanvalenlab/cellsam
+    paper: https://doi.org/10.1038/s41592-025-02879-w
+    checkpoint: data/06_models/fm_weights/cellsam/
+    checkpoint_source: See upstream release; no automatic download.
+    license: Verify code, checkpoint, and output terms at upstream source.
+    device: cuda
+    parameters: {threshold: null, model_native_size: null}
+    dependency_constraints: {torch: model-specific, optional_packages: model-specific}
+  cellpose_sam:
+    aliases: [cellpose-sam]
+    upstream: https://github.com/MouseLand/cellpose
+    paper: https://www.biorxiv.org/content/10.1101/2025.04.28.651001v1
+    checkpoint: data/06_models/fm_weights/cellpose_sam/
+    checkpoint_source: See upstream release; no automatic download.
+    license: Verify code, checkpoint, and output terms at upstream source.
+    device: cuda
+    parameters: {diameter: null, flow_threshold: null, cellprob_threshold: null}
+    dependency_constraints: {torch: model-specific, optional_packages: model-specific}
+  sam:
+    aliases: [segment-anything]
+    upstream: https://github.com/facebookresearch/segment-anything
+    paper: https://arxiv.org/abs/2304.02643
+    checkpoint: data/06_models/fm_weights/sam/
+    checkpoint_source: See upstream release; no automatic download.
+    license: Verify code, checkpoint, and output terms at upstream source.
+    device: cuda
+    parameters: {model_type: vit_h, prompt_strategy: null, mask_threshold: null}
+    dependency_constraints: {torch: model-specific, optional_packages: model-specific}
