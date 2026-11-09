@@ -1,9 +1,13 @@
-"""Run one foundation-model adapter on a single PNG or NDPI tile.
+"""Run one foundation-model adapter on a PNG/NDPI tile or a PNG tile directory.
 
 Example::
 
     python -m src.model_registry.run_foundation_model --model pathosam \
         --input tile.png --output data/03_predictions/foundation_model_runs
+
+    python -m src.model_registry.run_foundation_model --model pathosam \
+        --input src/model_registry/test_data/tiles \
+        --output data/03_predictions/foundation_model_runs
 
 The dispatcher owns I/O and provenance only; model behavior stays in adapters.
 """
@@ -12,11 +16,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.metadata
+import inspect
 import json
 import platform
+import re
 import sys
 import time
-import inspect
 from pathlib import Path
 from typing import Any
 
@@ -53,7 +58,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=_model_name, help="stable model identifier")
     parser.add_argument("--list-models", action="store_true", help="list stable model IDs and exit")
-    parser.add_argument("--input", type=Path, help="source .png fixture or .ndpi WSI")
+    parser.add_argument("--input", type=Path,
+                        help="source .png/.ndpi file or a directory of named PNG tiles")
     parser.add_argument("--output", type=Path,
                         help="run directory, or parent directory under which a unique run is created")
     parser.add_argument("--run-id", help="explicit run directory name (never overwrites)")
@@ -147,6 +153,36 @@ def _run_id(model: str, source_digest: str, request: TileRequest, overrides: dic
     return f"{model}_{suffix}"
 
 
+def _named_tile_coordinates(path: Path) -> tuple[str, int, int] | None:
+    match = re.fullmatch(r"(.+)_x(\d+)_y(\d+)", path.stem)
+    if match is None:
+        return None
+    return match.group(1), int(match.group(2)), int(match.group(3))
+
+
+def _create_adapter(args: argparse.Namespace, device: str,
+                    overrides: dict[str, Any]) -> Any:
+    module_name, class_name = _ADAPTERS[args.model]
+    adapter_cls = getattr(__import__(module_name, globals(), locals(), [class_name], 1), class_name)
+    accepted = inspect.signature(adapter_cls).parameters
+    unknown = sorted(set(overrides) - set(accepted))
+    if unknown:
+        raise ValueError(f"unsupported override(s) for {args.model}: {', '.join(unknown)}")
+    adapter = adapter_cls(**overrides)
+    import random
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    try:
+        import torch
+        torch.manual_seed(args.seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(args.seed)
+    except ImportError:
+        pass
+    adapter.load(args.checkpoint, device=device)
+    return adapter
+
+
 def _save_mask(path: Path, array: Any, *, instance: bool) -> None:
     data = np.asarray(array)
     if data.ndim != 2:
@@ -159,25 +195,85 @@ def _save_mask(path: Path, array: Any, *, instance: bool) -> None:
         Image.fromarray((data > 0).astype(np.uint8) * 255, mode="L").save(path, format="PNG")
 
 
-def run(args: argparse.Namespace) -> Path:
+def run(args: argparse.Namespace) -> Path | list[Path]:
     if not args.model or not args.input:
         raise ValueError("--model and --input are required (unless --list-models is used)")
     if (args.x is None) != (args.y is None):
         raise ValueError("--x and --y must be supplied together")
     args.input = args.input.expanduser().resolve()
+    if args.input.is_dir():
+        if args.x is not None:
+            raise ValueError("--x and --y cannot be used with a PNG tile directory; use filename coordinates")
+        if args.run_id is not None:
+            raise ValueError("--run-id cannot be used with a PNG tile directory; each tile gets its own run ID")
+        if args.tile_id is not None:
+            raise ValueError("--tile-id cannot be used with a PNG tile directory; each tile uses its filename")
+        if args.level != 0:
+            raise ValueError("PNG tile directories only support level=0")
+        input_paths = sorted(
+            path for path in args.input.iterdir()
+            if path.is_file() and path.suffix.lower() == ".png"
+        )
+        if not input_paths:
+            raise ValueError(f"PNG tile directory contains no PNG files: {args.input}")
+        overrides = _parse_overrides(args.param)
+        device = "cpu" if args.dry_run else _device(args.device)
+        adapter = None if args.dry_run else _create_adapter(args, device, overrides)
+        runs = []
+        for input_path in input_paths:
+            tile_args = argparse.Namespace(**vars(args))
+            tile_args.input = input_path
+            coordinates = _named_tile_coordinates(input_path)
+            if coordinates is None:
+                tile_args.image_id = args.image_id or input_path.stem
+                tile_args.x = tile_args.y = None
+            else:
+                image_id, tile_args.x, tile_args.y = coordinates
+                tile_args.image_id = args.image_id or image_id
+            tile_args.tile_id = input_path.stem
+            runs.append(_run_file(tile_args, batch_output=True, adapter=adapter))
+        return runs
+    return _run_file(args)
+
+
+def _run_file(args: argparse.Namespace, *, batch_output: bool = False,
+              adapter: Any = None) -> Path:
     if args.input.suffix.lower() == ".ndpi" and args.x is None:
         raise ValueError("NDPI input requires explicit level-0 --x and --y coordinates")
     overrides = _parse_overrides(args.param)
     request = TileRequest(input_path=args.input, image_id=args.image_id or args.input.stem,
         level=args.level, x=args.x, y=args.y, border_ratio=0 if args.border == "none" else 0.30,
         padding_policy=args.padding, tile_id=args.tile_id)
-    tile = extract_tile(request)
+    extraction_request = request
+    if batch_output:
+        extraction_request = TileRequest(
+            input_path=request.input_path, image_id=request.image_id, level=request.level,
+            output_size=request.output_size, border_ratio=request.border_ratio,
+            padding_policy=request.padding_policy, tile_id=request.tile_id,
+        )
+    tile = extract_tile(extraction_request)
+    if batch_output and request.x is not None and request.y is not None:
+        border = tile.metadata.border_pixels
+        tile.metadata.x, tile.metadata.y = request.x, request.y
+        tile.metadata.requested_box = (
+            request.x - border, request.y - border,
+            request.x + request.output_size + border,
+            request.y + request.output_size + border,
+        )
+        tile.metadata.readable_box = (
+            request.x, request.y,
+            request.x + request.output_size,
+            request.y + request.output_size,
+        )
     device = "cpu" if args.dry_run else _device(args.device)
     source_digest = _sha256(args.input)
     run_id = args.run_id or _run_id(args.model, source_digest, request, overrides, args.seed)
     if Path(run_id).name != run_id or run_id in {".", ".."}:
         raise ValueError("--run-id must be a single safe directory name")
-    if args.output is not None and args.run_id is None:
+    if batch_output:
+        parent = (args.output or Path("data/03_predictions/foundation_model_runs")).expanduser()
+        destination = parent / run_id
+    elif args.output is not None and args.run_id is None:
         destination = args.output.expanduser()
     else:
         parent = (args.output or Path("data/03_predictions/foundation_model_runs")).expanduser()
@@ -199,25 +295,8 @@ def run(args: argparse.Namespace) -> Path:
             device=device, elapsed_seconds=0.0, warnings=["dry-run: no model inference performed"],
             metadata={"dry_run": True})
     else:
-        module_name, class_name = _ADAPTERS[args.model]
-        adapter_cls = getattr(__import__(module_name, globals(), locals(), [class_name], 1), class_name)
-        accepted = inspect.signature(adapter_cls).parameters
-        unknown = sorted(set(overrides) - set(accepted))
-        if unknown:
-            raise ValueError(f"unsupported override(s) for {args.model}: {', '.join(unknown)}")
-        adapter = adapter_cls(**overrides)
-        # Seed the supported random sources before model loading/inference.
-        import random
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        try:
-            import torch
-            torch.manual_seed(args.seed)
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed_all(args.seed)
-        except ImportError:
-            pass
-        adapter.load(args.checkpoint, device=device)
+        if adapter is None:
+            adapter = _create_adapter(args, device, overrides)
         raw = adapter.predict(tile.image, request)
         result_obj = adapter.postprocess(raw, request)
         if result_obj.model_name != args.model:
@@ -275,11 +354,14 @@ def main(argv: list[str] | None = None) -> int:
         print("\n".join(SUPPORTED_MODELS))
         return 0
     try:
-        path = run(args)
+        paths = run(args)
     except (ValueError, RuntimeError, FileNotFoundError, OSError, ImportError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    print(path)
+    if isinstance(paths, list):
+        print("\n".join(str(path) for path in paths))
+    else:
+        print(paths)
     return 0
 
 

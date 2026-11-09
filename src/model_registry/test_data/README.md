@@ -1,20 +1,25 @@
-# Model registry smoke fixture
+# Model registry test tiles
 
-`sample_tile.png` is intended to be a 1024 × 1024 RGB center crop from the
-local bone-marrow NDPI slide. It is a smoke-inference fixture only: no reviewed
-instance mask is available, so it must not be used to claim segmentation
-quality. The source slide is local working data and must not be copied here.
+`tiles/` contains 18 RGB, 1024 × 1024 PNG tiles for smoke inference. Their
+filenames follow `<image_id>_x<level-0-x>_y<level-0-y>.png`. No reviewed
+instance masks are available, so these images must not be used to claim
+segmentation quality.
 
-The source NDPI is present in this checkout's ignored `data/` directory, but
-the fixture image and `sample_tile.json` have not yet been generated because
-the OpenSlide backend could not be run in the current environment. After
-installing OpenSlide, call `extract_tile(TileRequest(...))` in center-crop mode
-and save `tile.image` as `sample_tile.png`; record the returned metadata,
-source SHA-256, and extracted-image SHA-256 in `sample_tile.json`. Keep those
-files together so the fixture identity and extraction provenance remain
-stable. Add `sample_mask.tif` only after a reviewer creates an instance mask.
+Pass the directory to the foundation-model dispatcher to run every PNG through
+one selected model:
+
+```text
+python -m src.model_registry.run_foundation_model --model <model-id> \
+  --input src/model_registry/test_data/tiles \
+  --output data/03_predictions/foundation_model_runs
+```
+
+Each PNG is read as a complete tile; the coordinates in its filename are
+recorded as level-0 provenance and are not used to crop the PNG again. The
+dispatcher writes one unique run directory per tile. It loads the model once
+and reuses it for the directory.
 
 Coordinates in `TileRequest` are level-0 top-left coordinates. A 0.30 border
 adds 30% of the canonical output size on every side (rounded to the nearest
-pixel); only the model input contains context, and `Tile.central_crop()` returns
-the canonical center field of view.
+pixel); only the model input contains context, and `Tile.central_crop()`
+returns the canonical center field of view.
