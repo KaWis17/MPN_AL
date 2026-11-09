@@ -1,2 +1,3 @@
 # Working data lives on disk / PLGrid, never in Git
 /data/
+.env

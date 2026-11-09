@@ -1,15 +1,16 @@
 # Shared project dependencies
-numpy==2.5.4
-Pillow==13.0.0
+# We need to downgrade packages for Python 3.9 (as in PLGRID)
+numpy==2.0.2
+Pillow==10.4.0
 openslide-python==1.4.7
 
 # Comparison exports and plots
-pandas==3.1.1
-pyarrow==26.0.1
-matplotlib==3.11.2
+pandas==2.2.3
+pyarrow==16.0.0
+matplotlib==3.9.4
 
 # Tests
-pytest==9.2.0
+pytest==8.3.4
 
 # Model-specific inference dependencies (PyTorch/torchvision, PathoSAM,
 # CellViT++, CellSAM, Cellpose, and Segment Anything) must be installed with
