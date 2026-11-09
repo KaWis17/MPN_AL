@@ -2,7 +2,7 @@
 # We need to downgrade packages for Python 3.9 (as in PLGRID)
 numpy==2.0.2
 Pillow==10.4.0
-openslide-python==1.4.7
+openslide-python==1.4.2
 
 # Comparison exports and plots
 pandas==2.2.3
