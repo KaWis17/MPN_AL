@@ -31,7 +31,7 @@ def checked_checkpoint(path: Path | None, model: str) -> Path:
 
 
 def result(model: str, version: str, raw: Any, request: TileRequest,
-           checkpoint: str, device: str, started: float, metadata: dict[str, Any]) -> ModelResult:
+           checkpoint: str | None, device: str, started: float, metadata: dict[str, Any]) -> ModelResult:
     """Normalize an integer instance map and center crop contextual predictions."""
     labels = np.asarray(raw)
     if labels.ndim == 3:

@@ -226,9 +226,12 @@ def _create_adapter(args: argparse.Namespace, device: str,
             torch.cuda.manual_seed_all(args.seed)
     except ImportError:
         pass
-    args.checkpoint = _resolve_checkpoint(
-        args.model, args.checkpoint, getattr(args, "checkpoint_root", None)
-    )
+    if args.model == "pathosam" and args.checkpoint is None:
+        args.checkpoint = None
+    else:
+        args.checkpoint = _resolve_checkpoint(
+            args.model, args.checkpoint, getattr(args, "checkpoint_root", None)
+        )
     adapter.load(args.checkpoint, device=device)
     return adapter
 

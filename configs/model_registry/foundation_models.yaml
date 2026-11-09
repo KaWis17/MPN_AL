@@ -17,10 +17,10 @@ models:
     upstream: https://github.com/computational-cell-analytics/patho-sam
     paper: https://arxiv.org/abs/2502.00408
     checkpoint: data/06_models/fm_weights/pathosam/
-    checkpoint_source: See upstream release; no automatic download.
+    checkpoint_source: Built-in models are retrieved by micro_sam; custom checkpoints are optional.
     license: Verify code, checkpoint, and output terms at upstream source.
     device: cuda
-    parameters: {threshold: null, model_native_size: null}
+    parameters: {model_type: vit_b_histopathology, threshold: null, model_native_size: null}
     dependency_constraints: {torch: model-specific, optional_packages: model-specific}
   cellvit:
     aliases: [cellvit++]

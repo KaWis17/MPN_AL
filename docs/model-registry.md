@@ -29,10 +29,12 @@ when weights are stored elsewhere; the root must contain per-model
 subdirectories named after the stable model IDs. Keep weights and source WSIs
 out of Git.
 
-The requested paper and code references are collected in
-[`../../Instruction.md`](../../Instruction.md) and the YAML configuration.
-These upstream references are starting points, not confirmation that model
-weights are redistributable or that model outputs can be published.
+PathoSAM is the exception to the local-checkpoint requirement: by default, the
+adapter uses the upstream `vit_b_histopathology` model and lets `micro_sam`
+retrieve/cache its built-in weights. No `pathosam` checkpoint directory is
+needed. Pass `--checkpoint` only when intentionally using a custom checkpoint;
+the other built-in model variants can be selected with
+`--param model_type=vit_l_histopathology` or `--param model_type=vit_h_histopathology`.
 
 ## Windows 11 with WSL2
 
@@ -116,12 +118,8 @@ it does not load a checkpoint or execute a model. Inspect `run.json` for
 `input.png`, `instance_mask.tif`, and `binary_mask.png` in an image viewer. The
 mask should be empty in this contract run.
 
-For a real inference run, install that adapter's pinned dependencies and place
-one checkpoint file in its model directory. The default root is resolved from
-the repository location, so it works regardless of the current working
-directory. Set `MPN_AL_CHECKPOINT_ROOT` or pass `--checkpoint-root` to use a
-different local or cluster path. Create a new output directory for every run
-because existing directories are never overwritten:
+For PathoSAM, install its upstream environment and run a tile without
+`--checkpoint`; the first run may download/cache the built-in weights:
 
 ```bash
 python -m src.model_registry.run_foundation_model \
@@ -129,7 +127,16 @@ python -m src.model_registry.run_foundation_model \
   --input src/model_registry/test_data/sample_tile.png \
   --device cuda --seed 0 --border none \
   --output data/03_predictions/foundation_model_runs/pathosam-no-border
+```
 
+For other models, install that adapter's pinned dependencies and place one
+checkpoint file in its model directory. The default root is resolved from the
+repository location, so it works regardless of the current working directory.
+Set `MPN_AL_CHECKPOINT_ROOT` or pass `--checkpoint-root` to use a different
+local or cluster path. Create a new output directory for every run because
+existing directories are never overwritten:
+
+```bash
 python -m src.model_registry.run_foundation_model \
   --model pathosam \
   --input src/model_registry/test_data/sample_tile.png \
@@ -137,11 +144,12 @@ python -m src.model_registry.run_foundation_model \
   --output data/03_predictions/foundation_model_runs/pathosam-border-030
 ```
 
-For PLGrid, either pass the explicit `--checkpoint` file path as shown in the
-batch templates, or set `MPN_AL_CHECKPOINT_ROOT` to a storage path containing
-the same per-model subdirectories. For automatic selection, each model
-subdirectory must contain exactly one supported checkpoint file; use
-`--checkpoint` when it contains multiple files. For example:
+For PLGrid, PathoSAM can likewise use the built-in model without a checkpoint.
+For other models, either pass the explicit `--checkpoint` file path as shown
+in the batch templates, or set `MPN_AL_CHECKPOINT_ROOT` to a storage path
+containing the same per-model subdirectories. For automatic selection, each
+other model's subdirectory must contain exactly one supported checkpoint
+file; use `--checkpoint` when it contains multiple files. For example:
 
 ```bash
 export MPN_AL_CHECKPOINT_ROOT=/path/to/project/fm_weights
