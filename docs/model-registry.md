@@ -19,9 +19,15 @@ Before running a model, consult its upstream installation and inference guide,
 pin the repository revision and compatible package versions, obtain the
 checkpoint from its documented source, and record any required license or
 checkpoint terms. Check terms independently for code, weights, and generated
-outputs before distributing any of them. The harness does not download
-checkpoints. By default, checkpoint directories are under
-`data/06_models/fm_weights/`; keep weights and source WSIs out of Git.
+outputs before distributing any of them. The harness does not download checkpoints. Put each model's checkpoint under
+its directory in `data/06_models/fm_weights/` (for example,
+`data/06_models/fm_weights/pathosam/`). When exactly one supported checkpoint
+file is present in that model directory, it is selected automatically.
+`--checkpoint` selects a particular file when a model has multiple weights.
+Use `--checkpoint-root` or the `MPN_AL_CHECKPOINT_ROOT` environment variable
+when weights are stored elsewhere; the root must contain per-model
+subdirectories named after the stable model IDs. Keep weights and source WSIs
+out of Git.
 
 The requested paper and code references are collected in
 [`../../Instruction.md`](../../Instruction.md) and the YAML configuration.
@@ -60,8 +66,16 @@ cd ~/work/MPN_AL
 python3 -m venv .venv-model-registry
 source .venv-model-registry/bin/activate
 python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 # Install the pinned, model-specific requirements here.
 ```
+
+The shared `requirements.txt` installs the project dependencies used for image
+handling, comparison outputs, and tests. The distribution is named `Pillow`,
+although Python code imports it through the `PIL` module. Model inference
+packages are intentionally not combined into this file: install the
+selected adapter's versions from its upstream instructions because the model
+environments may be incompatible with one another.
 
 Verify the basic components independently:
 
@@ -102,25 +116,37 @@ it does not load a checkpoint or execute a model. Inspect `run.json` for
 `input.png`, `instance_mask.tif`, and `binary_mask.png` in an image viewer. The
 mask should be empty in this contract run.
 
-For a real inference run, install that adapter's pinned dependencies and pass a
-local checkpoint explicitly (or use the adapter's documented default path if
-supported). Create a new output directory for every run because existing
-directories are never overwritten:
+For a real inference run, install that adapter's pinned dependencies and place
+one checkpoint file in its model directory. The default root is resolved from
+the repository location, so it works regardless of the current working
+directory. Set `MPN_AL_CHECKPOINT_ROOT` or pass `--checkpoint-root` to use a
+different local or cluster path. Create a new output directory for every run
+because existing directories are never overwritten:
 
 ```bash
 python -m src.model_registry.run_foundation_model \
   --model pathosam \
   --input src/model_registry/test_data/sample_tile.png \
-  --checkpoint data/06_models/fm_weights/pathosam/weights.pth \
   --device cuda --seed 0 --border none \
   --output data/03_predictions/foundation_model_runs/pathosam-no-border
 
 python -m src.model_registry.run_foundation_model \
   --model pathosam \
   --input src/model_registry/test_data/sample_tile.png \
-  --checkpoint data/06_models/fm_weights/pathosam/weights.pth \
   --device cuda --seed 0 --border 0.30 \
   --output data/03_predictions/foundation_model_runs/pathosam-border-030
+```
+
+For PLGrid, either pass the explicit `--checkpoint` file path as shown in the
+batch templates, or set `MPN_AL_CHECKPOINT_ROOT` to a storage path containing
+the same per-model subdirectories. For automatic selection, each model
+subdirectory must contain exactly one supported checkpoint file; use
+`--checkpoint` when it contains multiple files. For example:
+
+```bash
+export MPN_AL_CHECKPOINT_ROOT=/path/to/project/fm_weights
+python -m src.model_registry.run_foundation_model \
+  --model pathosam --input "$INPUT" --device cuda --output "$OUT"
 ```
 
 For `.ndpi`, provide both level-0 `--x` and `--y`; coordinates are top-left

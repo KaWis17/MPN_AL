@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import importlib.metadata
 import inspect
 import json
+import os
 import platform
 import re
 import sys
@@ -43,6 +45,8 @@ _ALIASES = {
     "patho-sam": "pathosam", "cellvit++": "cellvit", "cell-sam": "cellsam",
     "cellpose-sam": "cellpose_sam", "segment-anything": "sam",
 }
+_DEFAULT_CHECKPOINT_ROOT = Path(__file__).resolve().parents[2] / "data" / "06_models" / "fm_weights"
+_CHECKPOINT_SUFFIXES = {".bin", ".ckpt", ".model", ".npy", ".pt", ".pth", ".safetensors"}
 
 
 def _model_name(value: str) -> str:
@@ -69,7 +73,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--border", choices=("none", "0.30"), default="none",
                         help="context added on each side of the canonical tile")
     parser.add_argument("--padding", choices=("reflect", "edge", "constant"), default="reflect")
-    parser.add_argument("--checkpoint", type=Path, help="explicit model checkpoint; never downloaded")
+    parser.add_argument("--checkpoint", type=Path,
+                        help="specific model checkpoint; overrides checkpoint-root discovery")
+    parser.add_argument("--checkpoint-root", type=Path,
+                        help="directory with one subdirectory per model (default: "
+                             "MPN_AL_CHECKPOINT_ROOT or data/06_models/fm_weights)")
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--tile-id", help="optional stable tile_id; defaults to source and coordinates")
@@ -160,10 +168,49 @@ def _named_tile_coordinates(path: Path) -> tuple[str, int, int] | None:
     return match.group(1), int(match.group(2)), int(match.group(3))
 
 
+def _resolve_checkpoint(model: str, checkpoint: Path | None,
+                        checkpoint_root: Path | None = None) -> Path:
+    if checkpoint is not None:
+        resolved = checkpoint.expanduser().resolve()
+        if not resolved.is_file():
+            raise FileNotFoundError(f"{model} checkpoint does not exist: {resolved}")
+        return resolved
+
+    configured_root = checkpoint_root or (
+        Path(os.environ["MPN_AL_CHECKPOINT_ROOT"])
+        if os.environ.get("MPN_AL_CHECKPOINT_ROOT")
+        else _DEFAULT_CHECKPOINT_ROOT
+    )
+    model_dir = configured_root.expanduser().resolve() / model
+    if not model_dir.is_dir():
+        raise FileNotFoundError(
+            f"No checkpoint directory for {model}: {model_dir}. "
+            "Place the model weights there, set --checkpoint-root or "
+            "MPN_AL_CHECKPOINT_ROOT, or pass --checkpoint."
+        )
+    candidates = sorted(
+        path for path in model_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in _CHECKPOINT_SUFFIXES
+    )
+    if not candidates:
+        raise FileNotFoundError(
+            f"No supported checkpoint file found under {model_dir}; "
+            f"expected one of {', '.join(sorted(_CHECKPOINT_SUFFIXES))}. "
+            "Pass --checkpoint to select a specific file."
+        )
+    if len(candidates) > 1:
+        choices = ", ".join(str(path) for path in candidates)
+        raise ValueError(
+            f"Multiple checkpoint files found for {model} under {model_dir}: "
+            f"{choices}. Pass --checkpoint to select one."
+        )
+    return candidates[0].resolve()
+
+
 def _create_adapter(args: argparse.Namespace, device: str,
                     overrides: dict[str, Any]) -> Any:
     module_name, class_name = _ADAPTERS[args.model]
-    adapter_cls = getattr(__import__(module_name, globals(), locals(), [class_name], 1), class_name)
+    adapter_cls = getattr(importlib.import_module(module_name, package=__package__), class_name)
     accepted = inspect.signature(adapter_cls).parameters
     unknown = sorted(set(overrides) - set(accepted))
     if unknown:
@@ -179,6 +226,9 @@ def _create_adapter(args: argparse.Namespace, device: str,
             torch.cuda.manual_seed_all(args.seed)
     except ImportError:
         pass
+    args.checkpoint = _resolve_checkpoint(
+        args.model, args.checkpoint, getattr(args, "checkpoint_root", None)
+    )
     adapter.load(args.checkpoint, device=device)
     return adapter
 

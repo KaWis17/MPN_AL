@@ -1,8 +1,52 @@
+import argparse
 import json
 
 from PIL import Image
+import pytest
 
-from src.model_registry.run_foundation_model import _parser, run
+from model_registry.patho_sam import PathoSAMAdapter
+from model_registry.run_foundation_model import _create_adapter, _parser, run
+
+
+def test_create_adapter_resolves_relative_module_and_default_checkpoint(tmp_path, monkeypatch):
+    checkpoint = tmp_path / "weights" / "pathosam" / "weights.pth"
+    checkpoint.parent.mkdir(parents=True)
+    checkpoint.touch()
+    monkeypatch.setattr(PathoSAMAdapter, "load", lambda self, *args, **kwargs: None)
+    args = argparse.Namespace(
+        model="pathosam", seed=0, checkpoint=None, checkpoint_root=tmp_path / "weights"
+    )
+
+    adapter = _create_adapter(args, "cpu", {})
+
+    assert isinstance(adapter, PathoSAMAdapter)
+    assert args.checkpoint == checkpoint.resolve()
+
+
+def test_checkpoint_discovery_requires_a_single_file(tmp_path):
+    from model_registry.run_foundation_model import _resolve_checkpoint
+
+    model_dir = tmp_path / "sam"
+    model_dir.mkdir()
+    first = model_dir / "vit_b.pth"
+    first.touch()
+
+    assert _resolve_checkpoint("sam", None, tmp_path) == first.resolve()
+
+    (model_dir / "vit_h.pth").touch()
+    with pytest.raises(ValueError, match="Multiple checkpoint files found"):
+        _resolve_checkpoint("sam", None, tmp_path)
+
+
+def test_checkpoint_root_environment_variable(tmp_path, monkeypatch):
+    from model_registry.run_foundation_model import _resolve_checkpoint
+
+    checkpoint = tmp_path / "cellsam" / "model.ckpt"
+    checkpoint.parent.mkdir()
+    checkpoint.touch()
+    monkeypatch.setenv("MPN_AL_CHECKPOINT_ROOT", str(tmp_path))
+
+    assert _resolve_checkpoint("cellsam", None) == checkpoint.resolve()
 
 
 def test_png_directory_runs_each_tile_with_filename_coordinates(tmp_path):

@@ -3,8 +3,8 @@ from __future__ import annotations
 from PIL import Image
 import pytest
 
-from src.model_registry.base import TileRequest
-from src.model_registry.tile_io import border_pixels, extract_tile
+from model_registry.base import TileRequest
+from model_registry.tile_io import border_pixels, extract_tile
 
 
 def test_border_pixels_are_per_side():

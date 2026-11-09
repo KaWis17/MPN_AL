@@ -1,0 +1,16 @@
+# Shared project dependencies
+numpy==2.5.4
+Pillow==13.0.0
+openslide-python==1.4.7
+
+# Comparison exports and plots
+pandas==3.1.1
+pyarrow==26.0.1
+matplotlib==3.11.2
+
+# Tests
+pytest==9.2.0
+
+# Model-specific inference dependencies (PyTorch/torchvision, PathoSAM,
+# CellViT++, CellSAM, Cellpose, and Segment Anything) must be installed with
+# versions compatible with the selected upstream model; see docs/model-registry.md.
