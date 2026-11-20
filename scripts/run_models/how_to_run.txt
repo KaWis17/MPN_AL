@@ -1,0 +1,24 @@
+sbatch run_segementation_models.sh \
+    --input-dir src/model_registry/test_data/tiles \
+    --model cellvit
+
+sbatch run_segementation_models.sh \
+    --input-dir src/model_registry/test_data/tiles \
+    --model pathosam
+
+sbatch run_segementation_models.sh \
+    --input-dir src/model_registry/test_data/tiles \
+    --model cellsam
+
+sbatch run_segementation_models.sh \
+    --input-dir src/model_registry/test_data/tiles \
+    --model cellpose_sam
+
+sbatch run_segementation_models.sh \
+    --input-dir src/model_registry/test_data/tiles \
+    --model sam
+
+sbatch run_segementation_models.sh \
+    --input-dir src/model_registry/test_data/tiles \
+    --model cellvit \
+    --output-base data/my_predictions
