@@ -1,0 +1,7 @@
+# Class-agnostic schema: every annotated object is a cell.
+# Use it to train a head that only has to find and separate cells.
+name: cell
+classes:
+  - id: 1
+    name: cell
+    color: [0, 200, 255]

@@ -1,2 +1,21 @@
 # Working data lives on disk / PLGrid, never in Git
 /data/
+
+# Model weights and run outputs
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+/outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+build/
+dist/
+
+# Secrets (HF_TOKEN, PLGrid account) stay local
+.env

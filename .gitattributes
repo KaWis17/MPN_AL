@@ -1,0 +1,4 @@
+# Shell scripts are copied to the cluster as they are in the working tree,
+# so they must keep LF line endings on Windows too.
+*.sh text eol=lf
+*.sbatch text eol=lf

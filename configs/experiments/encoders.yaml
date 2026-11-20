@@ -1,0 +1,22 @@
+# Full comparison of base models (run only after the pilot froze the training settings and the split file).
+# Models that need an access request are listed too: remove those you cannot download yet.
+name: encoders
+models:
+  - dinov2-s14        # general-domain reference
+  - lunit-dino-s16
+  - phikon-v2
+  - h0-mini
+  - midnight-12k
+  - h-optimus-0
+  - uni2-h
+  - virchow2
+seg_mpp: [null, 0.5]
+fractions: [0.1, 0.25, 0.5, 1.0]
+seeds: [0, 1, 2]
+train:
+  base_width: 32
+  epochs: 20
+  steps_per_epoch: 50
+  batch_size: 8
+  crop_size: 256
+  lr: 3.0e-4

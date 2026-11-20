@@ -1,0 +1,14 @@
+# Pilot: one open model, two resolutions, three sizes of the training set, three seeds. Its job is to measure
+# time and to tune hyper-parameters on the VALIDATION split before the full grid is frozen.
+name: pilot
+models: [lunit-dino-s16]
+seg_mpp: [null, 0.5]       # null = the tiles' own resolution (about 0.25 um/px at 40x)
+fractions: [0.1, 0.25, 1.0]
+seeds: [0, 1, 2]
+train:
+  base_width: 32
+  epochs: 20
+  steps_per_epoch: 50
+  batch_size: 8
+  crop_size: 256
+  lr: 3.0e-4
