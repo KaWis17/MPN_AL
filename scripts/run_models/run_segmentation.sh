@@ -20,7 +20,7 @@ set -euo pipefail
 
 MODEL="cellvit"
 INPUT_DIR=""
-OUTPUT_BASE="data/03_predictions/foundation_model_runs"
+OUTPUT_BASE="${SCRATCH:-/net/tscratch/people/$USER}/MPN_AL/data/03_predictions/foundation_model_runs"
 
 usage() {
     echo "Usage: sbatch run_segmentation.sh --input-dir DIR [--model MODEL] [--output-base DIR]"

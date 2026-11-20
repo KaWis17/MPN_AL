@@ -64,8 +64,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--list-models", action="store_true", help="list stable model IDs and exit")
     parser.add_argument("--input", type=Path,
                         help="source .png/.ndpi file or a directory of named PNG tiles")
+    parser.add_argument("--input-list", type=Path,
+                        help="text file containing one PNG/NDPI input path per line")
     parser.add_argument("--output", type=Path,
                         help="run directory for one tile; batch input uses it as the parent directory")
+    parser.add_argument("--output-base", type=Path,
+                        help="parent directory for batch tile outputs")
     parser.add_argument("--run-id", help="explicit run directory name (never overwrites)")
     parser.add_argument("--x", type=int, help="level-0 x coordinate of canonical tile top-left")
     parser.add_argument("--y", type=int, help="level-0 y coordinate of canonical tile top-left")
@@ -252,12 +256,64 @@ def _save_mask(path: Path, array: Any, *, instance: bool) -> None:
 
 
 def run(args: argparse.Namespace) -> Path | list[Path]:
-    if not args.model or not args.input:
-        raise ValueError("--model and --input are required (unless --list-models is used)")
+    if not args.model:
+        raise ValueError("--model is required (unless --list-models is used)")
+    if args.input_list is not None and args.input is not None:
+        raise ValueError("--input and --input-list cannot be used together")
+    if args.input_list is not None:
+        input_list = args.input_list.expanduser().resolve()
+        if not input_list.is_file():
+            raise FileNotFoundError(f"input list does not exist: {input_list}")
+        input_paths = [
+            Path(line.strip()).expanduser()
+            for line in input_list.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        ]
+        if not input_paths:
+            raise ValueError(f"input list contains no tile paths: {input_list}")
+        missing = [str(path) for path in input_paths if not path.is_file()]
+        if missing:
+            raise FileNotFoundError(f"input tile does not exist: {missing[0]}")
+        if args.output_base is None:
+            raise ValueError("--output-base is required with --input-list")
+        if args.output is not None:
+            raise ValueError("--output cannot be used with --input-list")
+    elif args.input is not None:
+        input_paths = None
+    else:
+        raise ValueError("--input or --input-list is required (unless --list-models is used)")
     if (args.x is None) != (args.y is None):
         raise ValueError("--x and --y must be supplied together")
     if args.target_mpp is not None and (not np.isfinite(args.target_mpp) or args.target_mpp <= 0):
         raise ValueError("--target-mpp must be a finite positive value")
+    if args.input_list is not None:
+        overrides = _parse_overrides(args.param)
+        device = "cpu" if args.dry_run else _device(args.device)
+        adapter = None if args.dry_run else _create_adapter(args, device, overrides)
+        output_base = args.output_base.expanduser().resolve()
+        runs = []
+        tile_names: dict[str, Path] = {}
+        for input_path in input_paths:
+            input_path = input_path.resolve()
+            if input_path.stem in tile_names:
+                raise ValueError(
+                    f"duplicate tile name {input_path.stem!r} in input list: "
+                    f"{tile_names[input_path.stem]} and {input_path}"
+                )
+            tile_names[input_path.stem] = input_path
+            tile_args = argparse.Namespace(**vars(args))
+            tile_args.input = input_path
+            coordinates = _named_tile_coordinates(input_path)
+            if coordinates is None:
+                tile_args.image_id = args.image_id or input_path.stem
+                tile_args.x = tile_args.y = None
+            else:
+                image_id, tile_args.x, tile_args.y = coordinates
+                tile_args.image_id = args.image_id or image_id
+            tile_args.tile_id = input_path.stem
+            tile_args.output = output_base / input_path.stem
+            runs.append(_run_file(tile_args, batch_output=True, adapter=adapter))
+        return runs
     args.input = args.input.expanduser().resolve()
     if args.input.is_dir():
         if args.x is not None:
@@ -281,6 +337,12 @@ def run(args: argparse.Namespace) -> Path | list[Path]:
         for input_path in input_paths:
             tile_args = argparse.Namespace(**vars(args))
             tile_args.input = input_path
+            tile_args.output = (
+                (args.output.expanduser().resolve()
+                 if args.output is not None
+                 else Path("segment_result") / args.model / "result")
+                / input_path.stem
+            )
             coordinates = _named_tile_coordinates(input_path)
             if coordinates is None:
                 tile_args.image_id = args.image_id or input_path.stem
@@ -332,8 +394,11 @@ def _run_file(args: argparse.Namespace, *, batch_output: bool = False,
     if Path(run_id).name != run_id or run_id in {".", ".."}:
         raise ValueError("--run-id must be a single safe directory name")
     if batch_output:
-        parent = (args.output or Path("segment_result") / args.model / "result").expanduser()
-        destination = parent / run_id
+        if args.output is not None:
+            destination = args.output.expanduser()
+        else:
+            parent = (args.output or Path("segment_result") / args.model / "result").expanduser()
+            destination = parent / run_id
     elif args.output is not None and args.run_id is None:
         destination = args.output.expanduser()
     else:
