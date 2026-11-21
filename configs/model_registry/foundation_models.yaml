@@ -53,7 +53,7 @@ models:
     upstream_revision: 362a8e521bcd7313d5cb280bcd4cfc12977c1e9f
     paper: https://doi.org/10.1038/s41592-025-02879-w
     checkpoint: cellsam_general_v1.2
-    checkpoint_source: Official loader downloads and verifies its MD5; DeepCell access token may be required
+    checkpoint_source: Official v1.2 archive from gated Hugging Face repo vanvalenlab/cellsam; HF account must accept license
     license: Apache-2.0 code; review separate model/data terms at upstream source
     native_output: cell instances; marrow whole-cell masks not validated
     whole_cell_validated: false
@@ -80,8 +80,8 @@ models:
     upstream: https://github.com/facebookresearch/segment-anything
     upstream_revision: dca509fe793f601edb92606367a655c15ac00fdf
     paper: https://arxiv.org/abs/2304.02643
-    checkpoint: official_vit_b
-    checkpoint_source: Official Meta URL downloaded on first use; SHA-256 recorded per run
+    checkpoint: sam_vit_b_01ec64.pth (official ViT-B base checkpoint)
+    checkpoint_source: Official Meta checkpoint URL downloaded and SHA-256 checked on first use
     license: Apache-2.0
     native_output: generic object proposals, not cell-specific
     whole_cell_validated: false

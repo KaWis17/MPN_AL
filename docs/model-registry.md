@@ -49,11 +49,13 @@ This command assumes the selected model's Python dependencies and a compatible
 PyTorch/CUDA environment are already installed. They are intentionally not
 installed dynamically at inference time: model environments conflict, and
 PLGrid CUDA and system-library setup depends on the selected cluster and job.
-First-party weights are loaded or downloaded by the upstream loader where
-available. SAM's official checkpoint is downloaded to the model cache on its
-first run. CellSAM's official checkpoint service may require a
-`DEEPCELL_ACCESS_TOKEN`; set it in the job environment or pass `--checkpoint`.
-CellViT downloads its official x40 checkpoint on first use; set
+First-party weights are loaded or downloaded by the adapter where available.
+SAM's official Meta ViT-B checkpoint (the base model weights) is downloaded
+and SHA-256 checked in the model cache on its first run. CellSAM downloads the
+official v1.2 checkpoint archive from the gated Hugging Face repository on its
+first run; accept the repository license and provide an authorized `HF_TOKEN`
+to the job environment (or use `hf auth login`). CellViT downloads its official
+x40 checkpoint on first use; set
 `CELLVIT_CACHE` to choose its persistent cache directory.
 
 ## Models, checkpoints, and licenses
@@ -68,9 +70,10 @@ Keep weights and source WSIs out of Git.
 
 PathoSAM uses the upstream `vit_b_histopathology` loader and its built-in
 weights by default. Cellpose uses the upstream `cpsam_v2` weights and downloads
-them on first use. CellSAM uses the official `cellsam_general` v1.2 loader;
-its authenticated download may require a DeepCell access token. SAM downloads
-the selected official Meta checkpoint into the shared cache. CellViT's adapter
+them on first use. CellSAM downloads the official gated v1.2 checkpoint from
+`vanvalenlab/cellsam` on Hugging Face and loads it through CellSAM's local model
+loader. SAM downloads the official Meta ViT-B base checkpoint into the shared
+cache. CellViT's adapter
 downloads the official CellViT-SAM-H x40 checkpoint by default. These pretrained
 weights have not been validated against the project's marrow whole-cell
 annotations; PathoSAM and CellViT are nucleus-oriented, and vanilla SAM is a
