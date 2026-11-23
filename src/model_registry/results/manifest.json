@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "reference": null,
+  "megakaryocyte_reference": null,
+  "reference_mask_policy": null,
+  "megakaryocyte_reference_mask_policy": null,
+  "instance_matching": {
+    "criterion": "one-to-one maximum-IoU assignment",
+    "iou_threshold": 0.5,
+    "panoptic_quality": "sum matched IoU / (TP + 0.5 FP + 0.5 FN)"
+  },
+  "binary_metrics": "foreground intersection over valid (reference != -1) pixels; empty-empty scores 1",
+  "connected_components": "8-connected components of the predicted binary foreground; touching separate labels may merge",
+  "border_truncated_instances": "compared as provided; no automatic ignore or truncation repair",
+  "run_ids": [
+    "cellpose_sam_4293a23a4c50",
+    "cellsam_16ecf0d28be3",
+    "cellvit_69494bdc1c74",
+    "pathosam_8aca7692de48"
+  ],
+  "runs": [
+    {
+      "run_id": "cellpose_sam_4293a23a4c50",
+      "model": "cellpose_sam",
+      "tile_id": "testZL26_x15872_y34304",
+      "run_json": "/mnt/c/Users/cypri/SM_SI/SM2/MPN_AL/MPN_AL/segmentation_results/cellpose_sam/3576915/testZL26_x15872_y34304/run.json",
+      "run_json_sha256": "66ed8b6563bf03a8e21f2a454c77a4f564fe8f535d2eae179a22ed048ecad832",
+      "prediction_sha256": "a648c8f82b829b2b3cddd9e7870d315234db81a0eb4958d16d4c7f262b26bc27",
+      "input_sha256": "88943f786deccdb3d6822d253ef7624783b34dc6ea02d710c94e8458f8b27256"
+    },
+    {
+      "run_id": "cellsam_16ecf0d28be3",
+      "model": "cellsam",
+      "tile_id": "testZL26_x15872_y34304",
+      "run_json": "/mnt/c/Users/cypri/SM_SI/SM2/MPN_AL/MPN_AL/segmentation_results/cellsam/3573668/testZL26_x15872_y34304/run.json",
+      "run_json_sha256": "857a3c42b9b737be369f66c12e501058b04b708b4a6fb54842717bc3a396f6e2",
+      "prediction_sha256": "2ed0e4d8190c56bf5b964df11209dee5cac9bdc68adaf291cfc17e9c39e078f5",
+      "input_sha256": "88943f786deccdb3d6822d253ef7624783b34dc6ea02d710c94e8458f8b27256"
+    },
+    {
+      "run_id": "cellvit_69494bdc1c74",
+      "model": "cellvit",
+      "tile_id": "testZL26_x15872_y34304",
+      "run_json": "/mnt/c/Users/cypri/SM_SI/SM2/MPN_AL/MPN_AL/segmentation_results/cellvit/net/tscratch/people/plgcypkoz/MPN_AL/data/03_predictions/foundation_model_runs/cellvit/3566069/testZL26_x15872_y34304/run.json",
+      "run_json_sha256": "04779925cbc56c9173041460fc5abeacf496a641d8370dd54ba067f5a7cf18e5",
+      "prediction_sha256": "d8d147e422ff983face28bddd5f2b4f947c0f15a28d270bb5da99971a2015b02",
+      "input_sha256": "88943f786deccdb3d6822d253ef7624783b34dc6ea02d710c94e8458f8b27256"
+    },
+    {
+      "run_id": "pathosam_8aca7692de48",
+      "model": "pathosam",
+      "tile_id": "testZL26_x15872_y34304",
+      "run_json": "/mnt/c/Users/cypri/SM_SI/SM2/MPN_AL/MPN_AL/segmentation_results/pathosam/3576909/testZL26_x15872_y34304/run.json",
+      "run_json_sha256": "5d015a469981b2e3d4e1ada73490a8fb482c9f5b7ff48d66b9c0ac9f09befd2e",
+      "prediction_sha256": "fd37b29c880cbbcd8f7140fddba631f9cc7f67e68a9f4a1da4869b9f3ad7e912",
+      "input_sha256": "88943f786deccdb3d6822d253ef7624783b34dc6ea02d710c94e8458f8b27256"
+    }
+  ],
+  "accuracy_metrics_available": false,
+  "megakaryocyte_metrics_available": false,
+  "parquet": "written"
+}

@@ -215,6 +215,72 @@ is centered. Keep model, checkpoint, device, seed, and all overrides identical
 between border conditions. Do not claim accuracy without a reviewed instance
 mask.
 
+## Compare saved runs
+
+`src/model_registry/comparison.py` reads completed run directories (the
+`run.json`, `input.png`, and `instance_mask.tif` files) and writes
+`metrics.csv`, `summary.csv`, a provenance `manifest.json`, and qualitative
+overlays. Point `--runs` at a directory containing model run directories;
+recursive discovery finds each `run.json`.
+
+For example, after transferring the results to the project machine:
+
+```bash
+python -m src.model_registry.comparison \
+  --runs /path/to/segmentation_results \
+  --tile-id testZL26_x15872_y34304
+```
+
+By default, the comparison output is saved to
+`src/model_registry/results/`. Pass `--output /path/to/another/directory` to
+choose a different location. If the destination already exists, add `--force`
+to allow the run to write or replace its output files.
+
+The output includes per-run `metrics.csv` and `summary.csv`, the input/run
+provenance in `manifest.json`, and a `qualitative_<tile-hash>.png` overlay
+showing each model's predicted boundaries. When Matplotlib is installed,
+`runtime_cell_count.png` compares inference time with predicted object count.
+With reviewed references, the run also writes `metric_by_model.png` and/or
+`megakaryocyte_metrics.png` for the scores that were supplied; `metrics.parquet`
+is written when pandas and a Parquet engine are available.
+
+Without reference annotations the reports include predicted instance count,
+foreground fraction, connected-component areas, inference time, and visual
+overlays. Accuracy metrics are `NA`; these descriptive values cannot establish
+which model segments cells or megakaryocytes most accurately.
+
+For accuracy scoring, prepare a reviewed integer instance-label TIFF at the
+same dimensions as the saved masks. Give every whole cell a unique positive
+label, use `0` for background, and optionally `-1` for pixels to ignore. To
+score megakaryocytes separately, prepare a second integer TIFF containing only
+reviewed megakaryocyte instances (unique positive IDs; `0` for other pixels;
+optional `-1` for ignored pixels), then pass both masks:
+
+```bash
+python -m src.model_registry.comparison \
+  --runs /path/to/segmentation_results \
+  --tile-id testZL26_x15872_y34304 \
+  --reference /path/to/reviewed_whole_cell_instances.tif \
+  --megakaryocyte-reference /path/to/reviewed_megakaryocyte_instances.tif \
+  --force
+```
+
+Whole-cell scoring reports foreground Dice/IoU, instance precision/recall/F1,
+and panoptic quality (PQ). Megakaryocyte scoring uses one-to-one maximum-IoU
+matching at IoU 0.5, reporting detection recall and mean matched IoU across
+reviewed target megakaryocytes (no-overlap targets count as IoU zero; overlaps
+below 0.5 still contribute to mean IoU but not detection recall). It does not
+count other predicted cells as megakaryocyte false positives. Check
+`megakaryocyte_metrics.png` and the corresponding columns in `metrics.csv` /
+`summary.csv`. The supplied `binary_mask.png` files are predictions, not
+reviewed references, and do not contain per-instance IDs; do not use them as
+ground truth.
+
+Reference masks can only be used when comparing runs for one tile at a time;
+`--tile-id` selects that tile when the run root has multiple tiles. Repeat for
+other reviewed tiles (and preferably held-out slides) before choosing a model:
+a single tile, especially one megakaryocyte, is not a robust benchmark.
+
 ## PLGrid: ARES and ATHENA
 
 The examples below are Slurm templates, not guaranteed resource names or

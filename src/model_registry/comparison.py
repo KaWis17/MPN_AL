@@ -3,7 +3,8 @@
 Reference label ``0`` is background and ``-1`` is ignored. Instance matching is
 one-to-one maximum-IoU matching at threshold 0.5. PQ follows the standard
 sum-IoU/(TP + .5 FP + .5 FN) definition. Accuracy is omitted (NA) without a
-reference; descriptive foreground and connected-component statistics remain.
+whole-cell reference; an optional megakaryocyte reference enables target-cell
+scoring independently. Descriptive statistics remain available without either.
 """
 from __future__ import annotations
 
@@ -141,9 +142,64 @@ def _instance_counts(pred: np.ndarray, ref: np.ndarray, valid: np.ndarray) -> di
             "instance_f1": f1, "pq": sq * rq, "sq": sq, "rq": rq}
 
 
-def evaluate(pred: np.ndarray, ref: np.ndarray | None) -> dict[str, Any]:
+def _megakaryocyte_metrics(pred: np.ndarray, ref: np.ndarray) -> dict[str, float | int | str]:
+    valid = ref != -1
+    predicted_ids, predicted_areas = np.unique(pred[valid & (pred > 0)], return_counts=True)
+    target_ids, target_areas = np.unique(ref[valid & (ref > 0)], return_counts=True)
+    if not len(target_ids):
+        return {
+            "megakaryocyte_gt_count": 0,
+            "megakaryocyte_detected_count": 0,
+            "megakaryocyte_detection_recall": "NA",
+            "megakaryocyte_mean_iou": "NA",
+        }
+
+    overlaps = np.zeros((len(predicted_ids), len(target_ids)), dtype=np.int64)
+    if len(predicted_ids):
+        pred_index = {int(value): i for i, value in enumerate(predicted_ids)}
+        target_index = {int(value): i for i, value in enumerate(target_ids)}
+        pairs = np.stack((pred[valid], ref[valid]), axis=1)
+        both = (pairs[:, 0] > 0) & (pairs[:, 1] > 0)
+        if np.any(both):
+            unique, counts = np.unique(pairs[both], axis=0, return_counts=True)
+            for (pred_id, target_id), count in zip(unique, counts):
+                overlaps[pred_index[int(pred_id)], target_index[int(target_id)]] = count
+
+    pred_areas = dict(zip(map(int, predicted_ids), map(int, predicted_areas)))
+    target_areas_by_id = dict(zip(map(int, target_ids), map(int, target_areas)))
+    ious = np.zeros_like(overlaps, dtype=float)
+    for i, pred_id in enumerate(predicted_ids):
+        for j, target_id in enumerate(target_ids):
+            intersection = overlaps[i, j]
+            if intersection:
+                union = pred_areas[int(pred_id)] + target_areas_by_id[int(target_id)] - intersection
+                ious[i, j] = intersection / union
+
+    assignment = _maximum_assignment(ious)
+    assigned_ious = {
+        target_index: float(ious[pred_index, target_index])
+        for pred_index, target_index in assignment
+    }
+    detected = sum(iou >= MATCH_IOU for iou in assigned_ious.values())
+    return {
+        "megakaryocyte_gt_count": len(target_ids),
+        "megakaryocyte_detected_count": detected,
+        "megakaryocyte_detection_recall": detected / len(target_ids),
+        "megakaryocyte_mean_iou": sum(assigned_ious.values()) / len(target_ids),
+    }
+
+
+def evaluate(pred: np.ndarray, ref: np.ndarray | None,
+             megakaryocyte_ref: np.ndarray | None = None) -> dict[str, Any]:
     if pred.ndim != 2 or np.any(pred < 0):
         raise ValueError("prediction must be a 2D non-negative instance-label mask")
+    if megakaryocyte_ref is not None:
+        if megakaryocyte_ref.ndim != 2 or np.any(megakaryocyte_ref < -1):
+            raise ValueError("megakaryocyte reference must be a 2D integer label mask with labels >= -1")
+        if megakaryocyte_ref.shape != pred.shape:
+            raise ValueError(
+                f"megakaryocyte reference shape {megakaryocyte_ref.shape} does not match prediction {pred.shape}"
+            )
     foreground = pred > 0
     sizes = _components(foreground)
     result: dict[str, Any] = {
@@ -158,20 +214,26 @@ def evaluate(pred: np.ndarray, ref: np.ndarray | None) -> dict[str, Any]:
             "binary_dice", "binary_iou", "binary_precision", "binary_recall", "binary_f1",
             "instance_tp", "instance_fp", "instance_fn", "instance_precision",
             "instance_recall", "instance_f1", "pq", "sq", "rq")})
-        return result
-    if ref.shape != pred.shape:
-        raise ValueError(f"reference shape {ref.shape} does not match prediction {pred.shape}")
-    valid = ref != -1
-    pb, rb = (pred > 0) & valid, (ref > 0) & valid
-    tp, fp, fn = int(np.count_nonzero(pb & rb)), int(np.count_nonzero(pb & ~rb)), int(np.count_nonzero(~pb & rb))
-    denom = 2 * tp + fp + fn
-    precision = tp / (tp + fp) if tp + fp else (1.0 if tp + fn == 0 else 0.0)
-    recall = tp / (tp + fn) if tp + fn else (1.0 if tp + fp == 0 else 0.0)
-    result.update({"binary_dice": 2 * tp / denom if denom else 1.0,
-                   "binary_iou": tp / (tp + fp + fn) if tp + fp + fn else 1.0,
-                   "binary_precision": precision, "binary_recall": recall,
-                   "binary_f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0})
-    result.update(_instance_counts(pred, ref, valid))
+    else:
+        if ref.shape != pred.shape:
+            raise ValueError(f"reference shape {ref.shape} does not match prediction {pred.shape}")
+        valid = ref != -1
+        pb, rb = (pred > 0) & valid, (ref > 0) & valid
+        tp, fp, fn = int(np.count_nonzero(pb & rb)), int(np.count_nonzero(pb & ~rb)), int(np.count_nonzero(~pb & rb))
+        denom = 2 * tp + fp + fn
+        precision = tp / (tp + fp) if tp + fp else (1.0 if tp + fn == 0 else 0.0)
+        recall = tp / (tp + fn) if tp + fn else (1.0 if tp + fp == 0 else 0.0)
+        result.update({"binary_dice": 2 * tp / denom if denom else 1.0,
+                       "binary_iou": tp / (tp + fp + fn) if tp + fp + fn else 1.0,
+                       "binary_precision": precision, "binary_recall": recall,
+                       "binary_f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0})
+        result.update(_instance_counts(pred, ref, valid))
+    if megakaryocyte_ref is not None:
+        result.update(_megakaryocyte_metrics(pred, megakaryocyte_ref))
+    else:
+        result.update({name: "NA" for name in (
+            "megakaryocyte_gt_count", "megakaryocyte_detected_count",
+            "megakaryocyte_detection_recall", "megakaryocyte_mean_iou")})
     return result
 
 
@@ -233,7 +295,8 @@ def _write_parquet(out: Path, rows: list[dict[str, Any]]) -> bool:
         return False
 
 
-def _plots(out: Path, rows: list[dict[str, Any]], reference_available: bool) -> None:
+def _plots(out: Path, rows: list[dict[str, Any]], reference_available: bool,
+           megakaryocyte_reference_available: bool) -> None:
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -247,6 +310,20 @@ def _plots(out: Path, rows: list[dict[str, Any]], reference_available: bool) -> 
             ax.bar(models, vals, color=["#4477AA", "#66CCEE", "#228833", "#CCBB44", "#EE6677"][:len(models)])
             ax.set_title(metric.replace("_", " ")); ax.set_ylim(0, 1); ax.tick_params(axis="x", rotation=35)
         fig.tight_layout(); fig.savefig(out / "metric_by_model.png", dpi=150); plt.close(fig)
+    if megakaryocyte_reference_available and any(
+        isinstance(row["megakaryocyte_mean_iou"], (int, float)) for row in rows
+    ):
+        models = [model for model in MODEL_ORDER if any(row["model"] == model for row in rows)]
+        metrics = ("megakaryocyte_mean_iou", "megakaryocyte_detection_recall")
+        fig, axes = plt.subplots(1, len(metrics), figsize=(4 * len(metrics), 4))
+        for ax, metric in zip(axes, metrics):
+            vals = [float(np.mean([
+                float(row[metric]) for row in rows
+                if row["model"] == model and isinstance(row[metric], (int, float))
+            ])) for model in models]
+            ax.bar(models, vals, color=["#4477AA", "#66CCEE", "#228833", "#CCBB44", "#EE6677"][:len(models)])
+            ax.set_title(metric.replace("_", " ")); ax.set_ylim(0, 1); ax.tick_params(axis="x", rotation=35)
+        fig.tight_layout(); fig.savefig(out / "megakaryocyte_metrics.png", dpi=150); plt.close(fig)
     # Paired border deltas for each tile/model where both settings exist.
     grouped: dict[tuple[str, str], dict[float, list[dict[str, Any]]]] = {}
     for row in rows:
@@ -302,21 +379,36 @@ def _qualitative(out: Path, runs: list[dict[str, Any]]) -> None:
         panel.save(out / f"qualitative_{safe}.png")
 
 
-def compare(runs_root: Path, output: Path, reference: Path | None = None, *, force: bool = False) -> Path:
+def compare(runs_root: Path, output: Path, reference: Path | None = None, *,
+            megakaryocyte_reference: Path | None = None, tile_id: str | None = None,
+            force: bool = False) -> Path:
     runs = discover_runs(runs_root.expanduser().resolve())
+    if tile_id is not None:
+        runs = [run for run in runs if run["tile_id"] == tile_id]
+        if not runs:
+            raise ValueError(f"no completed runs found for tile_id {tile_id!r}")
     ref = _load_labels(reference.expanduser().resolve()) if reference else None
-    if ref is not None:
+    megakaryocyte_ref = (
+        _load_labels(megakaryocyte_reference.expanduser().resolve())
+        if megakaryocyte_reference else None
+    )
+    if ref is not None or megakaryocyte_ref is not None:
         tile_ids = {r["tile_id"] for r in runs}
         if len(tile_ids) > 1:
-            raise ValueError("one --reference mask can only be used when all runs belong to one tile")
+            raise ValueError("reference masks can only be used when all runs belong to one tile")
         shapes = {tuple(r["labels"].shape) for r in runs}
-        if shapes != {tuple(ref.shape)}:
-            raise ValueError(f"reference shape {ref.shape} does not match all run shapes {sorted(shapes)}")
+        for name, reference_labels in (
+            ("reference", ref), ("megakaryocyte reference", megakaryocyte_ref)
+        ):
+            if reference_labels is not None and shapes != {tuple(reference_labels.shape)}:
+                raise ValueError(
+                    f"{name} shape {reference_labels.shape} does not match all run shapes {sorted(shapes)}"
+                )
     destination = output.expanduser().resolve()
     destination.mkdir(parents=True, exist_ok=force)
     rows = []
     for run in sorted(runs, key=lambda r: (r["tile_id"], MODEL_ORDER.index(r["model"]), float(r["border_ratio"] or 0), r["run_id"])):
-        metrics = evaluate(run["labels"], ref)
+        metrics = evaluate(run["labels"], ref, megakaryocyte_ref)
         rows.append({"tile_id": run["tile_id"], "model": run["model"], "border_ratio": run["border_ratio"],
                      "checkpoint": run["checkpoint"], "run_id": run["run_id"],
                      "runtime_seconds": run["runtime_seconds"] if run["runtime_seconds"] is not None else "NA",
@@ -327,12 +419,23 @@ def compare(runs_root: Path, output: Path, reference: Path | None = None, *, for
     # Descriptive table is independently useful and exists with/without GT.
     summary_cols = ("tile_id", "model", "border_ratio", "run_id", "runtime_seconds", "memory_peak_bytes",
                     "pred_cell_count", "foreground_fraction", "component_count_8conn",
-                    "component_area_mean_px", "component_area_median_px")
+                    "component_area_mean_px", "component_area_median_px",
+                    "megakaryocyte_gt_count", "megakaryocyte_detected_count",
+                    "megakaryocyte_detection_recall", "megakaryocyte_mean_iou")
     _write_csv(destination / "summary.csv", [{key: row[key] for key in summary_cols} for row in rows])
-    _plots(destination, rows, ref is not None)
+    _plots(destination, rows, ref is not None, megakaryocyte_ref is not None)
     _qualitative(destination, runs)
-    manifest = {"schema_version": 1, "reference": ({"path": str(reference.resolve()), "sha256": sha256(reference.resolve())} if reference else None),
+    manifest = {"schema_version": 1,
+        "reference": ({"path": str(reference.resolve()), "sha256": sha256(reference.resolve())} if reference else None),
+        "megakaryocyte_reference": (
+            {"path": str(megakaryocyte_reference.resolve()), "sha256": sha256(megakaryocyte_reference.resolve())}
+            if megakaryocyte_reference else None
+        ),
         "reference_mask_policy": "integer labels; 0=background; -1=ignored pixels" if reference else None,
+        "megakaryocyte_reference_mask_policy": (
+            "integer labels; positive IDs are reviewed megakaryocytes, 0=other/background, -1=ignored pixels"
+            if megakaryocyte_reference else None
+        ),
         "instance_matching": {"criterion": "one-to-one maximum-IoU assignment", "iou_threshold": MATCH_IOU,
                               "panoptic_quality": "sum matched IoU / (TP + 0.5 FP + 0.5 FN)"},
         "binary_metrics": "foreground intersection over valid (reference != -1) pixels; empty-empty scores 1",
@@ -343,6 +446,7 @@ def compare(runs_root: Path, output: Path, reference: Path | None = None, *, for
                   "run_json": str(r["manifest"].resolve()), "run_json_sha256": sha256(r["manifest"]),
                   "prediction_sha256": sha256(r["mask_path"]), "input_sha256": sha256(r["input_path"])} for r in runs],
         "accuracy_metrics_available": ref is not None,
+        "megakaryocyte_metrics_available": megakaryocyte_ref is not None,
         "parquet": "written" if parquet_written else "not written; install pandas and pyarrow or fastparquet to enable Parquet export"}
     (destination / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return destination
@@ -351,8 +455,14 @@ def compare(runs_root: Path, output: Path, reference: Path | None = None, *, for
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runs", required=True, type=Path, help="one run directory or a root containing run.json files")
+    parser.add_argument("--tile-id", help="compare only this tile from a root containing multiple tiles")
     parser.add_argument("--reference", type=Path, help="reviewed integer instance mask TIFF; -1 marks ignored pixels")
-    parser.add_argument("--output", required=True, type=Path, help="new comparison output directory")
+    parser.add_argument("--megakaryocyte-reference", type=Path,
+                        help="reviewed integer mask containing only megakaryocyte instances; 0=other, -1=ignored")
+    parser.add_argument(
+        "--output", type=Path, default=Path(__file__).resolve().parent / "results",
+        help="comparison output directory (default: src/model_registry/results)",
+    )
     parser.add_argument("--force", action="store_true", help="allow writing into an existing output directory")
     return parser
 
@@ -360,7 +470,11 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        path = compare(args.runs, args.output, args.reference, force=args.force)
+        path = compare(
+            args.runs, args.output, args.reference,
+            megakaryocyte_reference=args.megakaryocyte_reference,
+            tile_id=args.tile_id, force=args.force,
+        )
     except (OSError, ValueError, RuntimeError, ImportError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

@@ -1,0 +1,5 @@
+tile_id,model,border_ratio,run_id,runtime_seconds,memory_peak_bytes,pred_cell_count,foreground_fraction,component_count_8conn,component_area_mean_px,component_area_median_px,megakaryocyte_gt_count,megakaryocyte_detected_count,megakaryocyte_detection_recall,megakaryocyte_mean_iou
+testZL26_x15872_y34304,pathosam,0,pathosam_8aca7692de48,3.5683278209762648,NA,512,0.18372249603271484,344,560.0203488372093,472.5,NA,NA,NA,NA
+testZL26_x15872_y34304,cellvit,0,cellvit_69494bdc1c74,1.1709899809939088,NA,447,0.18951797485351562,342,581.0643274853801,501.0,NA,NA,NA,NA
+testZL26_x15872_y34304,cellsam,0,cellsam_16ecf0d28be3,5.584813731024042,NA,341,0.1724834442138672,244,741.2377049180328,615.0,NA,NA,NA,NA
+testZL26_x15872_y34304,cellpose_sam,0,cellpose_sam_4293a23a4c50,0.944064186012838,NA,433,0.15879535675048828,361,461.2437673130194,415.0,NA,NA,NA,NA
