@@ -1,0 +1,14 @@
+# Mechanics check on the synthetic demo data (scripts/make_demo_dataset.py): 2 models x 2 shares x 2 seeds.
+# The numbers mean nothing for histology; it only shows that the runner, array tasks and summaries work.
+name: demo
+models: [lunit-dino-s16, phikon-v2]
+seg_mpp: [null]
+fractions: [0.5, 1.0]
+seeds: [0, 1]
+train:
+  base_width: 16
+  epochs: 3
+  steps_per_epoch: 20
+  batch_size: 8
+  crop_size: 128
+  lr: 1.0e-3

@@ -1,0 +1,26 @@
+# First classification step agreed on 2026-11-10: megakaryocyte or not.
+#
+# DRAFT - the mapping below has to be confirmed with the pathologist before it is used for
+# anything that gets reported. It is built from the QuPath class list shared in the project
+# chat (meg_norm, meg_atypical, meg_proliferative, meg_dysplastic, bare_nucleus, uncertain,
+# cytoplasm, dwarf, ROI).
+#
+# Class ids start at 1 (0 is background). `aliases` are annotation names that count as the
+# class. Names under `ignore` are excluded from the loss; names under `roi` delimit the area
+# that was annotated exhaustively. An annotation name that appears nowhere in this file is
+# treated as `ignore` and reported in the log.
+name: megakaryocyte_binary
+classes:
+  - id: 1
+    name: megakaryocyte
+    color: [230, 25, 75]
+    aliases: [meg_norm, meg_atypical, meg_proliferative, meg_dysplastic]
+ignore:
+  - uncertain
+  # Open questions for the pathologist: do these count as megakaryocytes, as their own
+  # classes, or as parts of a cell? Until that is settled they neither reward nor punish.
+  - bare_nucleus
+  - dwarf
+  - cytoplasm
+roi:
+  - ROI

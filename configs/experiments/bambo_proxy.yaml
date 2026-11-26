@@ -1,0 +1,18 @@
+# PROXY experiment on BaMBo (204 images, 47 patients) with PSEUDO-labels: nuclei found by the stain baseline.
+# It measures how well a head on each encoder reproduces those outlines as the number of training images grows.
+# It says nothing about megakaryocytes or about agreement with a pathologist.
+name: bambo_proxy
+models: [dinov2-s14, lunit-dino-s16, phikon-v2, midnight-12k]   # the open models; gated ones are added later
+seg_mpp: [null]            # BaMBo records no resolution (0.5 um/px assumed), so no resolution comparison
+fractions: [0.1, 0.25, 0.5, 1.0]
+seeds: [0, 1, 2]
+train:
+  base_width: 32
+  epochs: 10
+  steps_per_epoch: 50
+  batch_size: 8
+  crop_size: 256
+  lr: 3.0e-4
+visualize:                 # keeps predictions on 9 tiles per evaluated split for figures; does not affect any metric
+  per_split: 9
+  seed: 0

@@ -1,0 +1,19 @@
+# Additional base models, loaded with `--registry-file configs/base_models/example.yaml`.
+# The built-in entries live in src/embeddings/registry.py; `python scripts/list_base_models.py`
+# prints them. Fields are those of BaseModelSpec.
+base_models:
+  # An encoder pre-trained in-house on unlabelled bone-marrow tiles (DINO, LeJEPA, ...).
+  # `source` is the timm architecture; the weights come from `--checkpoint path/to/weights.pth`.
+  # Keys wrapped by SSL training code ("teacher", "backbone.", "module.") are unwrapped on load.
+  - name: inhouse-vits16
+    backend: timm
+    source: vit_small_patch16_224
+    architecture: ViT-S/16
+    ssl_method: in-house SSL
+    training_data: unlabelled bone-marrow trephine tiles
+    native_size: 224
+    native_mpp: 0.5
+    mean: [0.485, 0.456, 0.406]   # replace with the statistics used during pre-training
+    std: [0.229, 0.224, 0.225]
+    license: internal
+    notes: Template entry; adjust the architecture and normalisation to the trained model.

@@ -172,6 +172,9 @@ Segmentator output on selected tiles. **Not** ground truth. Kept for audit and c
 | Path | What | How |
 |---|---|---|
 | `<round_id>/by_tile/<tile_id>.geojson` | Proposed cell polygons + classes | WSI level-0 coordinates; filename = `tile_id` |
+| `<round_id>/cells/<tile_id>.parquet` | One row per proposed cell, with its base-model embedding | Same cells and order as the GeoJSON; see [schemas/cells.parquet.md](../../schemas/cells.parquet.md) |
+| `<round_id>/tile_stats.jsonl` | Cell counts and uncertainty per tile | Appended per tile; input for `candidate_scores.parquet` |
+| `<round_id>/run.json` | Model, head, settings, code commit | Written by `scripts/segment_cells.py` |
 
 ### 04_annotations — pathologist ground truth
 
@@ -201,7 +204,7 @@ Checkpoints produced by training (and optional foundation-model weights if the l
 | Path | What | How |
 |---|---|---|
 | `fm_weights/` | Encoder checkpoints | Pinned release + checksum |
-| `<round_id>/<run_id>/` | Segmentator weights, config, short metrics | One directory per Slurm/training job |
+| `<round_id>/<run_id>/` | Segmentator weights, config, short metrics | One directory per Slurm/training job: `head.pt` (decoder only, never the encoder's weights), `last.pt`, `history.json`, `run.json`; see [schemas/segmentation_head.md](../../schemas/segmentation_head.md) |
 
 ### 07_manifests — indexes and checksums (no pixels)
 
